@@ -99,6 +99,20 @@ func (c *Conn) Listener(ctx context.Context) error {
 			c.handler.HandleDeviceMessage,
 		)
 	})
+	errg.Go(func() error {
+		// Subscribe to the homeassistant birth topic
+		return c.subscribeWithHandler(
+			conCtx,
+			topic.Topic("homeassistant/status"),
+			func(ctx context.Context, conn model.StateUpdater, msg model.MQTTMessage) error {
+				if bytes.Equal(msg.Payload(), bsOnline) {
+					return c.publishDiscovery(ctx)
+				}
+
+				return nil
+			},
+		)
+	})
 
 	return errg.Wait()
 }
@@ -169,7 +183,7 @@ func (c *Conn) sendMessage(_ context.Context, topic string, payload *bytes.Buffe
 	return nil
 }
 
-func (c *Conn) Connect(ctx context.Context) error {
+func (c *Conn) publishDiscovery(ctx context.Context) error {
 	if c.conn == nil {
 		return errors.New("connection is not established")
 	}
@@ -193,6 +207,10 @@ func (c *Conn) Connect(ctx context.Context) error {
 	}
 
 	return c.sendMessage(ctx, topic.String(), payload)
+}
+
+func (c *Conn) Connect(ctx context.Context) error {
+	return c.publishDiscovery(ctx)
 }
 
 func (c *Conn) UpdateState(ctx context.Context) error {

@@ -2,6 +2,10 @@ package ptrval
 
 import "net/url"
 
+func Bool(in bool) *bool {
+	return &in
+}
+
 func String(s string) *string {
 	return &s
 }

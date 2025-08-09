@@ -106,6 +106,11 @@ func (c *ClientOptions) SetCleanSession(cleanSession bool) *ClientOptions {
 	return c
 }
 
+func (c *ClientOptions) SetDefaultQoS(qos byte) *ClientOptions {
+	c.QoS = qos
+	return c
+}
+
 // type deviceDiscoveryOptions struct {
 // 	c *ClientOptions
 // }

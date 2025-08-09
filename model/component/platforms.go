@@ -13,3 +13,7 @@ func AsSwitch(c *Component) {
 func AsText(c *Component) {
 	c.Platform = ptrval.String("text")
 }
+
+func AsSelect(c *Component) {
+	c.Platform = ptrval.String("select")
+}

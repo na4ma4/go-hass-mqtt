@@ -93,15 +93,15 @@ func WithAvailabilityTopic(topic topic.Topic) OptFunc {
 	}
 }
 
-func WithMinimum(min int64) OptFunc {
+func WithMinimum(in int64) OptFunc {
 	return func(c *Component) {
-		c.Minimum = &min
+		c.Minimum = &in
 	}
 }
 
-func WithMaximum(max int64) OptFunc {
+func WithMaximum(in int64) OptFunc {
 	return func(c *Component) {
-		c.Maximum = &max
+		c.Maximum = &in
 	}
 }
 

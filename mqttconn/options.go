@@ -58,7 +58,7 @@ func WithHandler(handler model.Handler) DialOptions {
 
 func WithOnConnectHandler(handler OnConnectHandler) DialOptions {
 	return func(c *Conn) {
-		c.onConnectHandler = func(c mqtt.Client) {
+		c.onConnectHandler = func(_ mqtt.Client) {
 			handler()
 		}
 	}

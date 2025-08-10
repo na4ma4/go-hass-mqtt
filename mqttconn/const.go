@@ -10,4 +10,5 @@ const (
 	LWTBye   string = "GONE"
 )
 
+//nolint:gochecknoglobals // defined once constant.
 var bsOnline = []byte("online")

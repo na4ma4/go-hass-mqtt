@@ -63,7 +63,7 @@ func Dial(opts ...DialOptions) (*Conn, error) {
 		mqOpts.SetWill(
 			conn.opts.AvailabilityTopic.String(),
 			LWTBye,
-			2,
+			DefaultQoS,
 			false,
 		)
 	}
@@ -90,11 +90,11 @@ func Dial(opts ...DialOptions) (*Conn, error) {
 	return conn, nil
 }
 
-func (c *Conn) SendDeviceAvailable(ctx context.Context) error {
+func (c *Conn) SendDeviceAvailable(_ context.Context) error {
 	if c.opts.AvailabilityTopic != "" {
 		token := c.conn.Publish(
 			c.opts.AvailabilityTopic.String(),
-			2,
+			DefaultQoS,
 			false,
 			LWTHello,
 		)
@@ -145,7 +145,7 @@ func (c *Conn) Listener(ctx context.Context) error {
 		return c.subscribeWithHandler(
 			conCtx,
 			topic.Topic("homeassistant/status"),
-			func(ctx context.Context, conn model.StateUpdater, msg model.MQTTMessage) error {
+			func(ctx context.Context, _ model.StateUpdater, msg model.MQTTMessage) error {
 				if bytes.Equal(msg.Payload(), bsOnline) {
 					return errors.Join(
 						c.publishDiscovery(ctx),
@@ -302,15 +302,10 @@ func (c *Conn) UpdateAllAvailability(ctx context.Context) error {
 				continue
 			}
 
-			payload, err := c.handler.Availability(ctx, *cmp.ID)
-			if err != nil {
-				return fmt.Errorf("[%s] error: %w", cmp.ID, err)
-			}
-
 			wg.Add(1)
 			errg.Go(func() error {
 				wg.Done()
-				return c.sendMessage(ctx, topic.String(), payload)
+				return c.updateAvailability(ctx, cmp)
 			})
 		}
 	}
@@ -331,6 +326,24 @@ func (c *Conn) UpdateAllAvailability(ctx context.Context) error {
 	return nil
 }
 
+func (c *Conn) updateAvailability(ctx context.Context, cmp *component.Component) error {
+	if cmp.AvailabilityTopic != nil {
+		topic := *cmp.AvailabilityTopic
+		if topic == "" {
+			return fmt.Errorf("[%s] availability topic empty", cmp.ID)
+		}
+
+		payload, err := c.handler.Availability(ctx, *cmp.ID)
+		if err != nil {
+			return fmt.Errorf("[%s] error: %w", cmp.ID, err)
+		}
+
+		return c.sendMessage(ctx, topic.String(), payload)
+	}
+
+	return fmt.Errorf("[%s] availability topic not found", cmp.ID)
+}
+
 func (c *Conn) UpdateAvailability(ctx context.Context, id model.BasicIdentifier) error {
 	if c.conn == nil {
 		return errors.New("connection is not established")
@@ -338,21 +351,9 @@ func (c *Conn) UpdateAvailability(ctx context.Context, id model.BasicIdentifier)
 
 	for _, cmp := range c.components {
 		if strings.EqualFold(cmp.ID.String(), id.String()) {
-			if cmp.AvailabilityTopic != nil {
-				topic := *cmp.AvailabilityTopic
-				if topic == "" {
-					return fmt.Errorf("[%s] availability topic empty", id)
-				}
-
-				payload, err := c.handler.Availability(ctx, id)
-				if err != nil {
-					return fmt.Errorf("[%s] error: %w", id, err)
-				}
-
-				return c.sendMessage(ctx, topic.String(), payload)
+			if err := c.updateAvailability(ctx, cmp); err != nil {
+				return err
 			}
-
-			return fmt.Errorf("[%s] availability topic not found", id)
 		}
 	}
 	return fmt.Errorf("invalid identifier for availability: %s", id)

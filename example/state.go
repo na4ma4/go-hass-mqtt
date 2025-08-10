@@ -78,7 +78,7 @@ func (d *exampleDevice) State(_ context.Context) (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-func (d *exampleDevice) Availability(_ context.Context, id model.BasicIdentifier) (*bytes.Buffer, error) {
+func (d *exampleDevice) Availability(_ context.Context, _ model.BasicIdentifier) (*bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
 	buf.WriteString("OK")
 	return buf, nil

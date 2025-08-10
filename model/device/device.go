@@ -12,13 +12,15 @@ type Device struct {
 	baseDeviceTopic *topic.Topic `json:"-"`
 	hassTopic       *topic.Topic `json:"-"`
 
-	ID              model.BasicIdentifier `json:"ids,omitempty"`
-	Name            string                `json:"name,omitempty"`
-	Manufacturer    string                `json:"mf,omitempty"`
-	Model           string                `json:"mdl,omitempty"`
-	SoftwareVersion string                `json:"sw,omitempty"`
-	HardwareVersion string                `json:"hw,omitempty"`
-	Serial          string                `json:"sn,omitempty"`
+	ID                   model.BasicIdentifier `json:"ids,omitempty"`
+	Name                 string                `json:"name,omitempty"`
+	Manufacturer         string                `json:"mf,omitempty"`
+	Model                string                `json:"mdl,omitempty"`
+	SoftwareVersion      string                `json:"sw,omitempty"`
+	HardwareVersion      string                `json:"hw,omitempty"`
+	Serial               string                `json:"sn,omitempty"`
+	AvailabilityTopic    *topic.Topic          `json:"avty_t,omitempty"`
+	AvailabilityTemplate string                `json:"avty_tpl,omitempty"`
 }
 
 func New(id model.BasicIdentifier, opts ...OptFunc) *Device {

@@ -6,6 +6,10 @@ func Bool(in bool) *bool {
 	return &in
 }
 
+func Int64(in int64) *int64 {
+	return &in
+}
+
 func String(s string) *string {
 	return &s
 }

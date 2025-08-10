@@ -7,15 +7,32 @@ import (
 	"github.com/na4ma4/go-hass-mqtt/model/component"
 	"github.com/na4ma4/go-hass-mqtt/model/device"
 	"github.com/na4ma4/go-hass-mqtt/model/origin"
+	"github.com/na4ma4/go-hass-mqtt/model/topic"
 )
 
 type Discovery struct {
 	Device       *device.Device                  `json:"dev,omitempty"`
 	Origin       *origin.Origin                  `json:"o,omitempty"`
 	Cmps         map[string]*component.Component `json:"cmps,omitempty"`
-	CommandTopic string                          `json:"cmd_t,omitempty"`
-	StateTopic   string                          `json:"stat_t,omitempty"`
-	Qos          byte                            `json:"qos,omitempty"`
+	CommandTopic topic.Topic                     `json:"cmd_t,omitempty"`
+	StateTopic   topic.Topic                     `json:"stat_t,omitempty"`
+
+	// Availability (either single topic or list of objects)
+	AvailabilityTopic    topic.Topic    `json:"avty_t,omitempty"`
+	AvailabilityTemplate string         `json:"avty_tpl,omitempty"`
+	AvailabilityMode     string         `json:"avty_mode,omitempty"`
+	PayloadAvailable     string         `json:"pl_avail,omitempty"`
+	PayloadNotAvailable  string         `json:"pl_not_avail,omitempty"`
+	Availability         []Availability `json:"avty,omitempty"`
+	Qos                  byte           `json:"qos,omitempty"`
+}
+
+// Availability describes a single availability entry.
+type Availability struct {
+	Topic               topic.Topic `json:"t"`
+	PayloadAvailable    string      `json:"pl_avail,omitempty"`
+	PayloadNotAvailable string      `json:"pl_not_avail,omitempty"`
+	ValueTemplate       string      `json:"val_tpl,omitempty"`
 }
 
 func NewDiscovery(dev *device.Device, org *origin.Origin, opts ...DiscoveryOptFunc) *Discovery {
@@ -59,15 +76,39 @@ func WithQos(qos byte) DiscoveryOptFunc {
 	}
 }
 
-func WithCommandTopic(topic string) DiscoveryOptFunc {
+func WithCommandTopic(topic topic.Topic) DiscoveryOptFunc {
 	return func(d *Discovery) {
 		d.CommandTopic = topic
 	}
 }
 
-func WithStateTopic(topic string) DiscoveryOptFunc {
+func WithStateTopic(topic topic.Topic) DiscoveryOptFunc {
 	return func(d *Discovery) {
 		d.StateTopic = topic
+	}
+}
+
+func WithAvailabilityTopic(topic topic.Topic) DiscoveryOptFunc {
+	return func(d *Discovery) {
+		d.AvailabilityTopic = topic
+	}
+}
+
+func WithAvailabilityTemplate(template string) DiscoveryOptFunc {
+	return func(d *Discovery) {
+		d.AvailabilityTemplate = template
+	}
+}
+
+func WithPayloadAvailable(payload string) DiscoveryOptFunc {
+	return func(d *Discovery) {
+		d.PayloadAvailable = payload
+	}
+}
+
+func WithPayloadNotAvailable(payload string) DiscoveryOptFunc {
+	return func(d *Discovery) {
+		d.PayloadNotAvailable = payload
 	}
 }
 

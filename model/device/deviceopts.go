@@ -30,6 +30,18 @@ func WithHomeAssistantTopic(topic topic.Topic) OptFunc {
 	}
 }
 
+func WithAvailabilityTopic(topic topic.Topic) OptFunc {
+	return func(d *Device) {
+		d.AvailabilityTopic = &topic
+	}
+}
+
+func WithAvailabilityTemplate(template string) OptFunc {
+	return func(d *Device) {
+		d.AvailabilityTemplate = template
+	}
+}
+
 func WithDeviceName(name string) OptFunc {
 	return func(d *Device) {
 		d.Name = name

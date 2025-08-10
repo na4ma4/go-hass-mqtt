@@ -4,21 +4,28 @@ import (
 	"context"
 	"net/url"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/na4ma4/go-hass-mqtt/model"
 	"github.com/na4ma4/go-hass-mqtt/model/component"
 	"github.com/na4ma4/go-hass-mqtt/model/device"
 	"github.com/na4ma4/go-hass-mqtt/model/origin"
+	"github.com/na4ma4/go-hass-mqtt/model/topic"
 )
 
-type ClientOptions struct {
-	Servers           []*url.URL
-	ClientID          string
-	Username          string
-	Password          string
-	CleanSession      bool
-	QoS               byte // Quality of Service level for MQTT messages, default is 2
-	DisconnectTimeout uint // DisconnectTimeout wait the specified number of milliseconds for existing work to be completed before disconnecting.
-}
+type (
+	OnConnectHandler        func()
+	OnConnectionLostHandler func(error)
+	ClientOptions           struct {
+		Servers           []*url.URL
+		ClientID          string
+		Username          string
+		Password          string
+		CleanSession      bool
+		QoS               byte // Quality of Service level for MQTT messages, default is 2
+		DisconnectTimeout uint // DisconnectTimeout wait the specified number of milliseconds for existing work to be completed before disconnecting.
+		AvailabilityTopic topic.Topic
+	}
+)
 
 func DefaultOptions() *ClientOptions {
 	return &ClientOptions{
@@ -46,6 +53,22 @@ func WithOptions(opts *ClientOptions) DialOptions {
 func WithHandler(handler model.Handler) DialOptions {
 	return func(c *Conn) {
 		c.handler = handler
+	}
+}
+
+func WithOnConnectHandler(handler OnConnectHandler) DialOptions {
+	return func(c *Conn) {
+		c.onConnectHandler = func(c mqtt.Client) {
+			handler()
+		}
+	}
+}
+
+func WithOnConnectionLostHandler(handler OnConnectionLostHandler) DialOptions {
+	return func(c *Conn) {
+		c.onConnectionLostHandler = func(_ mqtt.Client, err error) {
+			handler(err)
+		}
 	}
 }
 
@@ -108,6 +131,11 @@ func (c *ClientOptions) SetCleanSession(cleanSession bool) *ClientOptions {
 
 func (c *ClientOptions) SetDefaultQoS(qos byte) *ClientOptions {
 	c.QoS = qos
+	return c
+}
+
+func (c *ClientOptions) SetAvailabilityTopic(topic topic.Topic) *ClientOptions {
+	c.AvailabilityTopic = topic
 	return c
 }
 

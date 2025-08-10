@@ -17,3 +17,7 @@ func AsText(c *Component) {
 func AsSelect(c *Component) {
 	c.Platform = ptrval.String("select")
 }
+
+func AsNumber(c *Component) {
+	c.Platform = ptrval.String("number")
+}

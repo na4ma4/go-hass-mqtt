@@ -9,12 +9,19 @@ type StateUpdater interface {
 	// UpdateState publishes the current state of the device to the MQTT broker.
 	// It returns an error if the state could not be published.
 	UpdateState(ctx context.Context) error
+
+	UpdateAvailability(ctx context.Context, id BasicIdentifier) error
+
+	UpdateAllAvailability(ctx context.Context) error
+
+	SendDeviceAvailable(ctx context.Context) error
 }
 
 type Handler interface {
 	HomeAssistantMessage(ctx context.Context, conn StateUpdater, msg MQTTMessage) error
 	HandleDeviceMessage(ctx context.Context, conn StateUpdater, msg MQTTMessage) error
 	State(ctx context.Context) (*bytes.Buffer, error)
+	Availability(ctx context.Context, id BasicIdentifier) (*bytes.Buffer, error)
 }
 
 // MQTTMessage represents a message received from the MQTT broker.

@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
+	"sync"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/na4ma4/go-contextual"
@@ -24,6 +27,9 @@ type Conn struct {
 	handler    model.Handler
 	conn       mqtt.Client
 	opts       *ClientOptions
+
+	onConnectHandler        mqtt.OnConnectHandler
+	onConnectionLostHandler mqtt.ConnectionLostHandler
 }
 
 var ErrInvalidServer = errors.New("invalid server configuration")
@@ -54,15 +60,53 @@ func Dial(opts ...DialOptions) (*Conn, error) {
 	mqOpts.SetUsername(conn.opts.Username)
 	mqOpts.SetPassword(conn.opts.Password)
 	mqOpts.SetCleanSession(conn.opts.CleanSession)
-	conn.conn = mqtt.NewClient(mqOpts)
-
-	token := conn.conn.Connect()
-	if token.Wait() && token.Error() != nil {
-		return nil, token.Error()
+	if conn.opts.AvailabilityTopic != "" {
+		log.Printf("setting will topic to '%s' with message '%s'", conn.opts.AvailabilityTopic.String(), LWTBye)
+		mqOpts.SetWill(
+			conn.opts.AvailabilityTopic.String(),
+			LWTBye,
+			2,
+			false,
+		)
+	}
+	if conn.onConnectHandler != nil {
+		mqOpts.SetOnConnectHandler(conn.onConnectHandler)
+	}
+	if conn.onConnectionLostHandler != nil {
+		mqOpts.SetConnectionLostHandler(conn.onConnectionLostHandler)
 	}
 
-	// Implement the dialing logic here
+	conn.conn = mqtt.NewClient(mqOpts)
+
+	{
+		token := conn.conn.Connect()
+		if token.Wait() && token.Error() != nil {
+			return nil, token.Error()
+		}
+	}
+
+	if err := conn.SendDeviceAvailable(context.Background()); err != nil {
+		return nil, err
+	}
+
 	return conn, nil
+}
+
+func (c *Conn) SendDeviceAvailable(ctx context.Context) error {
+	if c.opts.AvailabilityTopic != "" {
+		log.Printf("sending birth message topic to '%s' with message '%s'", c.opts.AvailabilityTopic.String(), LWTHello)
+		token := c.conn.Publish(
+			c.opts.AvailabilityTopic.String(),
+			2,
+			false,
+			LWTHello,
+		)
+		if token.Wait() && token.Error() != nil {
+			return token.Error()
+		}
+	}
+
+	return nil
 }
 
 func (c *Conn) Close() error {
@@ -106,7 +150,11 @@ func (c *Conn) Listener(ctx context.Context) error {
 			topic.Topic("homeassistant/status"),
 			func(ctx context.Context, conn model.StateUpdater, msg model.MQTTMessage) error {
 				if bytes.Equal(msg.Payload(), bsOnline) {
-					return c.publishDiscovery(ctx)
+					return errors.Join(
+						c.publishDiscovery(ctx),
+						c.UpdateState(ctx),
+						c.UpdateAllAvailability(ctx),
+					)
 				}
 
 				return nil
@@ -193,13 +241,22 @@ func (c *Conn) publishDiscovery(ctx context.Context) error {
 		return errors.New("invalid device homeassistant topic")
 	}
 
-	msg := messages.NewDiscovery(
-		c.dev, c.origin,
-		messages.WithCommandTopic(c.dev.TopicDeviceBase().Join("cmd").String()),
-		messages.WithStateTopic(c.dev.TopicDeviceBase().Join("state").String()),
+	opts := []messages.DiscoveryOptFunc{
+		messages.WithCommandTopic(c.dev.TopicDeviceBase().Join("cmd")),
+		messages.WithStateTopic(c.dev.TopicDeviceBase().Join("state")),
 		messages.WithComponents(c.components...),
 		messages.WithQos(DefaultQoS),
-	)
+	}
+
+	if c.opts.AvailabilityTopic != "" {
+		opts = append(opts,
+			messages.WithAvailabilityTopic(c.opts.AvailabilityTopic),
+			messages.WithPayloadAvailable(LWTHello),
+			messages.WithPayloadNotAvailable(LWTBye),
+		)
+	}
+
+	msg := messages.NewDiscovery(c.dev, c.origin, opts...)
 
 	payload, err := msg.BytesBuffer()
 	if err != nil {
@@ -229,4 +286,77 @@ func (c *Conn) UpdateState(ctx context.Context) error {
 	}
 
 	return c.sendMessage(ctx, topic.String(), payload)
+}
+
+func (c *Conn) UpdateAllAvailability(ctx context.Context) error {
+	if c.conn == nil {
+		return errors.New("connection is not established")
+	}
+
+	wg := sync.WaitGroup{}
+	errg, ctx := errgroup.WithContext(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for _, cmp := range c.components {
+		if cmp.AvailabilityTopic != nil && cmp.ID != nil {
+			topic := *cmp.AvailabilityTopic
+			if topic == "" {
+				continue
+			}
+
+			payload, err := c.handler.Availability(ctx, *cmp.ID)
+			if err != nil {
+				return fmt.Errorf("[%s] error: %w", cmp.ID, err)
+			}
+
+			wg.Add(1)
+			errg.Go(func() error {
+				wg.Done()
+				return c.sendMessage(ctx, topic.String(), payload)
+			})
+		}
+	}
+
+	waitChan := make(chan interface{}, 1)
+	go func() {
+		wg.Wait()
+		waitChan <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-waitChan:
+		cancel()
+	}
+
+	return nil
+}
+
+func (c *Conn) UpdateAvailability(ctx context.Context, id model.BasicIdentifier) error {
+	if c.conn == nil {
+		return errors.New("connection is not established")
+	}
+
+	for _, cmp := range c.components {
+		if strings.EqualFold(cmp.ID.String(), id.String()) {
+			if cmp.AvailabilityTopic != nil {
+				topic := *cmp.AvailabilityTopic
+				if topic == "" {
+					return fmt.Errorf("[%s] availability topic empty", id)
+				}
+
+				payload, err := c.handler.Availability(ctx, id)
+				if err != nil {
+					return fmt.Errorf("[%s] error: %w", id, err)
+				}
+
+				return c.sendMessage(ctx, topic.String(), payload)
+			}
+
+			return fmt.Errorf("[%s] availability topic not found", id)
+		}
+	}
+	return fmt.Errorf("invalid identifier for availability: %s", id)
 }

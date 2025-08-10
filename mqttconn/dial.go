@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 
@@ -61,7 +60,6 @@ func Dial(opts ...DialOptions) (*Conn, error) {
 	mqOpts.SetPassword(conn.opts.Password)
 	mqOpts.SetCleanSession(conn.opts.CleanSession)
 	if conn.opts.AvailabilityTopic != "" {
-		log.Printf("setting will topic to '%s' with message '%s'", conn.opts.AvailabilityTopic.String(), LWTBye)
 		mqOpts.SetWill(
 			conn.opts.AvailabilityTopic.String(),
 			LWTBye,
@@ -94,7 +92,6 @@ func Dial(opts ...DialOptions) (*Conn, error) {
 
 func (c *Conn) SendDeviceAvailable(ctx context.Context) error {
 	if c.opts.AvailabilityTopic != "" {
-		log.Printf("sending birth message topic to '%s' with message '%s'", c.opts.AvailabilityTopic.String(), LWTHello)
 		token := c.conn.Publish(
 			c.opts.AvailabilityTopic.String(),
 			2,
